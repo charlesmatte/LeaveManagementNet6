@@ -39,6 +39,12 @@ namespace LeaveManagement.Web.Repositories
             await _context.SaveChangesAsync();
             return entity;
         }
+        
+        public async Task AddRangeAsync(List<T> entities)
+        {
+            await _context.AddRangeAsync(entities);
+            await _context.SaveChangesAsync();
+        }
 
         public async Task<T> UpdateAsync(T entity)
         {
