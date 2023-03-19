@@ -3,7 +3,6 @@ using LeaveManagement.Web.Constants;
 using LeaveManagement.Web.Contracts;
 using LeaveManagement.Web.Data;
 using LeaveManagement.Web.Models;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,12 +13,14 @@ namespace LeaveManagement.Web.Controllers
         private readonly UserManager<Employee> _userManager;
         private readonly IMapper _mapper;
         private readonly ILeaveAllocationRepository _leaveAllocationRepository;
+        private readonly ILeaveTypeRepository _leaveTypeRepository;
 
-        public EmployeesController(UserManager<Employee> userManager, IMapper mapper, ILeaveAllocationRepository leaveAllocationRepository)
+        public EmployeesController(UserManager<Employee> userManager, IMapper mapper, ILeaveAllocationRepository leaveAllocationRepository, ILeaveTypeRepository leaveTypeRepository)
         {
             _userManager = userManager;
             _mapper = mapper;
             _leaveAllocationRepository = leaveAllocationRepository;
+            _leaveTypeRepository = leaveTypeRepository;
         }
 
         // GET: EmployeesController
@@ -36,67 +37,42 @@ namespace LeaveManagement.Web.Controllers
             return View(await _leaveAllocationRepository.GetEmployeeAllocations(id));
         }
 
-        // GET: EmployeesController/Create
-        public ActionResult Create()
-        {
-            return View();
-        }
-
-        // POST: EmployeesController/Create
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public ActionResult Create(IFormCollection collection)
-        {
-            try
-            {
-                return RedirectToAction(nameof(Index));
-            }
-            catch
-            {
-                return View();
-            }
-        }
 
         // GET: EmployeesController/Edit/5
-        public ActionResult Edit(int id)
+        public async Task<ActionResult> EditAllocation(int id)
         {
-            return View();
+            var model = await _leaveAllocationRepository.GetEmployeeAllocation(id);
+            if (model == null)
+            {
+                return NotFound();
+            }
+
+            return View(model);
         }
 
         // POST: EmployeesController/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public ActionResult Edit(int id, IFormCollection collection)
+        public async Task<ActionResult> EditAllocation(LeaveAllocationEditVM model)
         {
             try
             {
-                return RedirectToAction(nameof(Index));
+                if (ModelState.IsValid)
+                {
+                    if (await _leaveAllocationRepository.UpdateEmployeeAllocation(model))
+                        return RedirectToAction(nameof(ViewAllocations), new { id = model.EmployeeId });
+
+                }
             }
-            catch
+            catch (Exception ex)
             {
-                return View();
+                ModelState.AddModelError(string.Empty, "An error has occured. Please try again later.");
             }
+
+            model.Employee = _mapper.Map<EmployeeVM>(await _userManager.FindByIdAsync(model.EmployeeId));
+            model.LeaveType = _mapper.Map<LeaveTypeVM>(await _leaveTypeRepository.GetByIdAsync(model.LeaveTypeId));
+            return View(model);
         }
 
-        // GET: EmployeesController/Delete/5
-        public ActionResult Delete(int id)
-        {
-            return View();
-        }
-
-        // POST: EmployeesController/Delete/5
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public ActionResult Delete(int id, IFormCollection collection)
-        {
-            try
-            {
-                return RedirectToAction(nameof(Index));
-            }
-            catch
-            {
-                return View();
-            }
-        }
     }
 }
