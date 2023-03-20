@@ -1,44 +1,66 @@
-﻿using LeaveManagement.Web.Data;
+﻿using AutoMapper;
+using LeaveManagement.Web.Constants;
+using LeaveManagement.Web.Contracts;
+using LeaveManagement.Web.Data;
 using LeaveManagement.Web.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 
 namespace LeaveManagement.Web.Controllers
 {
+    [Authorize]
     public class LeaveRequestsController : Controller
     {
         private readonly ApplicationDbContext _context;
+        private readonly ILeaveRequestRepository _leaveRequestRepository;
 
-        public LeaveRequestsController(ApplicationDbContext context)
+        public LeaveRequestsController(ApplicationDbContext context, ILeaveRequestRepository leaveRequestRepository)
         {
             _context = context;
+            _leaveRequestRepository = leaveRequestRepository;
         }
 
+        [Authorize(Roles = Roles.Administrator)]
         // GET: LeaveRequests
         public async Task<IActionResult> Index()
         {
-            var applicationDbContext = _context.LeaveRequests.Include(l => l.LeaveType);
-            return View(await applicationDbContext.ToListAsync());
+            var model = await _leaveRequestRepository.GetAdminLeaveRequestList();
+            return View(model);
+        }
+
+        public async Task<ActionResult> MyLeave()
+        {
+            var model = await _leaveRequestRepository.GetMyLeaveDetails();
+            return View(model);
         }
 
         // GET: LeaveRequests/Details/5
         public async Task<IActionResult> Details(int? id)
         {
-            if (id == null || _context.LeaveRequests == null)
+            var model = await _leaveRequestRepository.GetLeaveRequestAsync(id);
+            if (model == null)
             {
                 return NotFound();
             }
+            return View(model);
+        }
 
-            var leaveRequest = await _context.LeaveRequests
-                .Include(l => l.LeaveType)
-                .FirstOrDefaultAsync(m => m.Id == id);
-            if (leaveRequest == null)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ApproveRequest(int id, bool approved)
+        {
+            try
             {
-                return NotFound();
+                await _leaveRequestRepository.ChangeApprovalStatus(id, approved);
+            }
+            catch (Exception e)
+            {
+                throw;
             }
 
-            return View(leaveRequest);
+            return RedirectToAction(nameof(Index));
         }
 
         // GET: LeaveRequests/Create
@@ -56,16 +78,23 @@ namespace LeaveManagement.Web.Controllers
         // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("StartDate,EndDate,LeaveTypeId,DateRequested,RequestComments,Approved,Cancelled,RequestingEmployeeId,Id,DateCreated,DateUpdated")] LeaveRequest leaveRequest)
+        public async Task<IActionResult> Create(LeaveRequestCreateVM model)
         {
-            if (ModelState.IsValid)
+            try
             {
-                _context.Add(leaveRequest);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                if (ModelState.IsValid)
+                {
+                    await _leaveRequestRepository.CreateLeaveRequest(model);
+                    return RedirectToAction(nameof(MyLeave));
+                }
             }
-            ViewData["LeaveTypeId"] = new SelectList(_context.LeaveTypes, "Id", "Name", leaveRequest.LeaveTypeId);
-            return View(leaveRequest);
+            catch (Exception e)
+            {
+                ModelState.AddModelError(string.Empty, "An error has occured, please try again later");
+            }
+            
+            model.LeaveTypes = new SelectList(_context.LeaveTypes, "Id", "Name", model.LeaveTypeId);
+            return View(model);
         }
 
         // GET: LeaveRequests/Edit/5
